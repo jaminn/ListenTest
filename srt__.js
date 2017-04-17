@@ -1,4 +1,4 @@
-module.exports = (function(){
+
     function from_srt(data, ms) {
             var useMs = ms ? true : false;
             data = data.replace(/\r/g, '');
@@ -53,5 +53,4 @@ module.exports = (function(){
     }
 
     return array;
-    }
-});        
+    }  
