@@ -215,9 +215,9 @@
                 case YT.PlayerState.ENDED:
                     console.log('ended');
                     manage_words.displayJust("", "END", "");
-                    setTimeout(function () {
-                        window.location.href = "/";
-                    }, 800);
+//                    setTimeout(function () {
+//                        window.location.href = "/";
+//                    }, 800);
                     $("#hover").fadeIn(200);
                     $("#hover").fadeOut(400);
                     
@@ -486,7 +486,7 @@
             [0, 1, 2, 3].forEach(function (i) {
                 if (wordOnly(unshuffled[howMany_del]) != wordOnly(SuffButton[id2number(selected_word(i).id)])) {
                     var right_answer = wordOnly(unshuffled[howMany_del]);
-                    selected_word(i).style.backgroundColor = "#bbb";
+                    selected_word(i).style.backgroundColor = "#eee";
                     selected_word(i).onclick = block_dis;
                 }
             });
