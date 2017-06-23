@@ -159,7 +159,7 @@
 
         function onPlayerReady(event) {
             p["vid"]  = p["vid"] || "IXxZRZxafEQ"; 
-            var request = $.get(".subs/" + p["vid"] + ".srt");
+            var request = $.get("subs/" + p["vid"] + ".srt");
             request.success(function (data) {
                 srtF = data;
                 parsed_srt = from_srt(srtF, true);
