@@ -1,351 +1,375 @@
+    (function youtubeInit() {
         var tag = document.createElement('script');
         tag.src = "//www.youtube.com/iframe_api";
         var firstScriptTag = document.getElementsByTagName('script')[0];
         firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-        var srtF = ""; //전문(원문) 텍스트 파일
-        var parsed_srt = []; //원문 파싱된
-        var quiz_counter = 0; //카운터: 몇번째 시간대 인지
-        var unshuffled; //셔플 안된 단어들
-        var howMany_del = 0; //몇번이나 지웠나?
-        var allRightBool = false; //전부 맞쳤을 경우
-        var replayBool = false;
-        var playByButton = false; //스타트 버튼으로 재생했는가
-        var HowMany_wrongs = 0; //몇번이나 틀렸나?
-        var wrongsCnt = 0;
-        var time = 0;
-        var wrongWord = "";
-        var vidID; //비디오 아이디
-        var SuffButton = ["apple", "banna", "orange", "kiwi"]; //화면에 표시되는값
-        var srtLast = 0; //srt파싱된것의 마지막 번호
-        var stop4quiz = false;
-        var player;
-        var manage_words = {
-            reg: /(\S*?)\{\!(.*?)\,(.*?)\,(.*?)\}/g,
-            words: [],
-            p1: '#hover-text-pun',
-            p2: '#hover-text-con',
-            p3: '#hover-text-mean',
-            word_replace: function (sen) {
-                return sen.replace(this.reg, '$1');
-            },
-            sen2wordPushAll: function (sen) {
-                var word;
-                this.words = [];
-                while (word = this.reg.exec(sen)) {
-                    this.words.push(word);
-                }
-            },
-            displayNth: function (N) {
-                if (this.words[N]) {
-                    $(this.p1).html(this.words[N][2]);
-                    $(this.p2).html(this.words[N][3]);
-                    $(this.p3).html(this.words[N][4]);
-                    return true;
-                } else {
-                    console.log("NO Nth for display");
-                    return false;
-                }
-            },
-            displayMatch: function (match) {
-                for (word of this.words) {
-                    console.log(word);
-                    if (word[1] === match) {
-                        $(this.p1).html(word[2]);
-                        $(this.p2).html(word[3]);
-                        $(this.p3).html(word[4]);
-                        return true;
-                    }
-                }
-                console.log("NO MATCH for display");
-                return false;
-            },
-            displayJust: function (top, center, bottom) {
-                $(this.p1).html(top);
-                $(this.p2).html(center);
-                $(this.p3).html(bottom);
-            }
-        };
+    })();
 
-        $(document).ready(function () {
-            console.log("page ready!");
-
-            //document.getElementById('player').style.pointerEvents = 'none'; //실사용시 add this line
-        });
-
-        function HtmlDecode(s) {
-            var el = document.createElement("div");
-            el.innerHTML = s;
-            result1 = el.innerText || el.textContent;
-            var el2 = document.createElement("div");
-            el2.innerHTML = result1;
-            result2 = el2.innerText || el2.textContent;
-            return result2;
-        }
-
-        function wordOnly(s) {
-            var sen = s;
-            sen = sen.replace(/\B[_+.,!@#$%^&*();\\/|<>"']+\b/g, "").toLowerCase();
-            sen = sen.replace(/\b[_+.,!@#$%^&*();\\/|<>"']+\B/g, "").toLowerCase();
-            return sen;
-        }
-
-        function getParams() {
-            var param = new Array();
-            var url = decodeURIComponent(location.href);
-            url = decodeURIComponent(url);
-            var params;
-            params = url.substring(url.indexOf('?') + 1, url.length);
-            params = params.split("&");
-            var size = params.length;
-            var key, value;
-            for (var i = 0; i < size; i++) {
-                key = params[i].split("=")[0];
-                value = params[i].split("=")[1];
-                param[key] = value;
-            }
-            return param;
-        }
-        var p = getParams();
-        timer = setInterval(timecnt, 1000);
-
-        function timecnt() {
-            time++;
-        }
-
-        function getSubTry(data, event) {
-            var mytext;
-            var mystart;
-            var myend;
-            [].forEach.call(data.getElementsByTagName('text'), function (val) {
-                mytext = HtmlDecode(val.innerHTML);
-                mystart = val.getAttribute("start") * 1000;
-                myend = mystart + val.getAttribute("dur") * 1000;
-                parsed_srt.push({
-                    text: mytext,
-                    startTime: mystart,
-                    endTime: myend
-                });
-            });
-            srtLast = parsed_srt.length - 1;
+    var srt = {
+        text: "", //전문(원문) 텍스트 파일
+        parsed: [], //원문 파싱된
+        lastIdx: 0, //srt파싱된것의 마지막 번호  
+        isJP : false,
+        loadLocal: function (data) {
+            srt.text = data;
+            srt.parsed = from_srt(srt.text, true);
+            srt.lastIdx = srt.parsed.length - 1;
+            console.log("youtubeReady");
             event.target.cueVideoById({
                 videoId: p['vid']
             });
             $("#starter").removeClass("myHide");
-            $("#hover").fadeOut(500);
+            $("#hover").hide();
         }
+    };
 
-        function onYouTubeIframeAPIReady() {
-            player = new YT.Player('player', {
-                playerVars: {
-                    controls: 0 //개발시에는 controls: 2, 실사용시에는 controls: 0 
+    var quizCnt = 0; //카운터: 몇번째 시간대 인지
+    var unshuffled; //셔플 안된 단어들
+    var delCnt = 0; //몇번이나 지웠나?
+    var isAllRight = false; //전부 맞쳤을 경우
+    var isReplay = false;
+    var isPlayByBtn = false; //스타트 버튼으로 재생했는가
+    var wrongCnt = 0; //몇번이나 틀렸나?
+    var time = 0;
+    var wrongWord = "";
+    var vidID; //비디오 아이디
+    var quizWords = ["apple", "banna", "orange", "kiwi"]; //화면에 표시되는값
+    var isQuizStop = false;
+    var player;
+    var manage_words = {
+        reg: /(\S*?)\{\!(.*?)\,(.*?)\,(.*?)\}/g,
+        words: [],
+        p1: '#hover-text-pun',
+        p2: '#hover-text-con',
+        p3: '#hover-text-mean',
+        word_replace: function (sen) {
+            return sen.replace(this.reg, '$1');
+        },
+        sen2wordPushAll: function (sen) {
+            var word;
+            this.words = [];
+            while (word = this.reg.exec(sen)) {
+                this.words.push(word);
+            }
+        },
+        displayNth: function (N) {
+            if (this.words[N]) {
+                $(this.p1).html(this.words[N][2]);
+                $(this.p2).html(this.words[N][3]);
+                $(this.p3).html(this.words[N][4]);
+                return true;
+            } else {
+                console.log("NO Nth for display");
+                return false;
+            }
+        },
+        displayMatch: function (match) {
+            for (word of this.words) {
+                console.log(word);
+                if (word[1] === match) {
+                    $(this.p1).html(word[2]);
+                    $(this.p2).html(word[3]);
+                    $(this.p3).html(word[4]);
+                    return true;
+                }
+            }
+            console.log("NO MATCH for display");
+            return false;
+        },
+        displayJust: function (top, center, bottom) {
+            $(this.p1).html(top);
+            $(this.p2).html(center);
+            $(this.p3).html(bottom);
+        }
+    };
+
+    $(document).ready(function () {
+        console.log("page ready!");
+
+        //document.getElementById('player').style.pointerEvents = 'none'; //실사용시 add this line
+    });
+
+    function HtmlDecode(s) {
+        var el = document.createElement("div");
+        el.innerHTML = s;
+        result1 = el.innerText || el.textContent;
+        var el2 = document.createElement("div");
+        el2.innerHTML = result1;
+        result2 = el2.innerText || el2.textContent;
+        return result2;
+    }
+
+    function wordOnly(s) {
+        if(!srt.isJP){
+            var sen = s;
+            sen = sen.replace(/\B[_+.,!@#$%^&*();\\/|<>"']+\b/g, "").toLowerCase();
+            sen = sen.replace(/\b[_+.,!@#$%^&*();\\/|<>"']+\B/g, "").toLowerCase();
+            return sen;
+        }else{
+            return s;
+        }
+    }
+
+    function getParams() {
+        var param = new Array();
+        var url = decodeURIComponent(location.href);
+        url = decodeURIComponent(url);
+        var params;
+        params = url.substring(url.indexOf('?') + 1, url.length);
+        params = params.split("&");
+        var size = params.length;
+        var key, value;
+        for (var i = 0; i < size; i++) {
+            key = params[i].split("=")[0];
+            value = params[i].split("=")[1];
+            param[key] = value;
+        }
+        return param;
+    }
+    var p = getParams();
+    timer = setInterval(timecnt, 1000);
+
+    function timecnt() {
+        time++;
+    }
+
+    function getSubTry(data, event) {
+        var mytext;
+        var mystart;
+        var myend;
+        [].forEach.call(data.getElementsByTagName('text'), function (val) {
+            mytext = HtmlDecode(val.innerHTML);
+            mystart = val.getAttribute("start") * 1000;
+            myend = mystart + val.getAttribute("dur") * 1000;
+            srt.parsed.push({
+                text: (!srt.isJP)?mytext:(new TinySegmenter()).segment(mytext).join(" "),
+                startTime: mystart,
+                endTime: myend
+            });
+        });
+        srt.lastIdx = srt.parsed.length - 1;
+        event.target.cueVideoById({
+            videoId: p['vid']
+        });
+        $("#starter").removeClass("myHide");
+        $("#hover").fadeOut(500);
+    }
+
+    function onYouTubeIframeAPIReady() {
+        player = new YT.Player('player', {
+            playerVars: {
+                controls: 0 //개발시에는 controls: 2, 실사용시에는 controls: 0 
 
                     ,
-                    cc_load_policy: 1,
-                    rel: 0,
-                    autohide: 1,
-                    disablekb: 1,
-                    iv_load_policy: 3,
-                    fs: 0,
-                    gl: 'KR',
-                    hl: 'ko',
-                    showinfo: 0
-                },
-                events: {
-                    'onReady': onPlayerReady,
-                    'onStateChange': onPlayerStateChange
-                }
-            });
-        }
-
-        function onPlayerReady(event) {
-            p["vid"]  = p["vid"] || "IXxZRZxafEQ"; 
-            var request = $.get("subs/" + p["vid"] + ".srt");
-            request.success(function (data) {
-                srtF = data;
-                parsed_srt = from_srt(srtF, true);
-                srtLast = parsed_srt.length - 1;
-                console.log("youtubeReady");
-                event.target.cueVideoById({
-                    videoId: p['vid']
-                });
-                $("#starter").removeClass("myHide");
-                $("#hover").hide();
-
-            });
-            request.fail(function () {
-                console.log("자막을 가져오지 못함(자기 컴)");
-                $.ajax({
-                    url: 'https://video.google.com/timedtext?lang=en&v=' + p['vid'],
-                    success: function (data) {
-                        try {
-                            getSubTry(data, event);
-                        } catch (e) {
-                            $.ajax({
-                                url: 'http://video.google.com/timedtext?lang=en-GB&v=' + p['vid'],
-                                success: function (data) {
-                                    try {
-                                        getSubTry(data, event);
-                                    } catch (e) {
-                                        console.log(e);
-                                        console.log("자막을 가져오지 못함(유튜브)");
-                                        alert("자막이 없습니다.");
-                                        window.location.href = "/";
-                                    }
-                                },
-                                error: function () {
-                                    console.log("자막을 가져오지 못함(유튜브)");
-                                    alert("로딩error");
-                                }
-                            });
-                        }
-                    },
-                    error: function () {
-                        console.log("자막을 가져오지 못함(유튜브)");
-                        alert("로딩error");
-                    }
-                });
-            });
-        }
-
-        function onPlayerStateChange(event) {
-            switch (event.data) {
-                case YT.PlayerState.UNSTARTED:
-                    console.log('unstarted');
-                    break;
-                case YT.PlayerState.ENDED:
-                    console.log('ended');
-                    manage_words.displayJust("", "END", "");
-//                    setTimeout(function () {
-//                        window.location.href = "/";
-//                    }, 800);
-                    $("#hover").fadeIn(200);
-                    $("#hover").fadeOut(400);
-                    
-                    break;
-                case YT.PlayerState.PLAYING:
-                    if (!playByButton) {
-                        player.stopVideo();
-                        alert("start버튼으로 재생해주세요");
-                    }
-                    console.log('--playing--');
-                    stop4quiz = false;
-                    setTimeout(function () {
-                        replayBool = false;
-                    }, 3000);
-                    my_timer = setInterval(check_where, 5);
-                    $("#buttonP").html(""); //버튼 초기화
-                    $("#hover").hide();
-                    //$("#textP").html("");  //문장 초기화
-                    howMany_del = 0;
-                    HowMany_wrongs = 0;
-                    $("#hintP").html("<h1>" + "힌트" + "</h1>");
-                    $("#life").html("<h1>" + "틀린횟수" + "</h1>");
-                    break;
-                case YT.PlayerState.PAUSED:
-                    clearInterval(my_timer);
-                    console.log('-paused-');
-                    break;
-                case YT.PlayerState.BUFFERING: //중요
-                    clearInterval(my_timer);
-                    console.log('buffering');
-                    break;
-                case YT.PlayerState.CUED:
-                    console.log('video cued');
-                    break;
-            }
-        }
-
-        function lets_start() {
-            player.playVideo();
-            var fn = function () {
-                player.playVideo();
-            }
-            setTimeout(fn, 3000);
-            $("#starter").remove();
-            playByButton = true;
-            my_timer = setInterval(check_where, 10);
-            progress_timer = setInterval(function () {
-                var playerTotalTime = player.getDuration();
-                var playerCurrentTime = Math.round(player.getCurrentTime());
-                var playerTimeDifference = (playerCurrentTime / playerTotalTime) * 100;
-                var playerTimePercent = playerTimeDifference.toFixed(2);
-                //console.log(playerTimePercent + '%');
-                $(".progress-bar").width(playerTimePercent + '%');
-            }, 100);
-        }
-
-        function selected_word(i) {
-            return $("#buttonP").children().eq(i).children().eq(0).get(0);
-        }
-
-        function id2number(id) {
-            return parseInt(id.substr(1));
-        }
-        $(document).keydown(function (e) {
-            switch (e.keyCode) {
-                case 65: //A
-                    if (selected_word(0) !== undefined) {
-                        if (selected_word(0).onclick !== block_dis)
-                            my_dis(selected_word(0));
-                        else
-                            block_dis();
-                    }
-                    break;
-                case 83: //S
-                    if (selected_word(1) !== undefined) {
-                        if (selected_word(1).onclick !== block_dis)
-                            my_dis(selected_word(1));
-                        else
-                            block_dis();
-                    }
-                    break;
-                case 68: //D
-                    if (selected_word(2) !== undefined) {
-                        if (selected_word(2).onclick !== block_dis)
-                            my_dis(selected_word(2));
-                        else
-                            block_dis();
-                    }
-                    break;
-                case 70: //F
-                    if (selected_word(3) !== undefined) {
-                        if (selected_word(3).onclick !== block_dis)
-                            my_dis(selected_word(3));
-                        else
-                            block_dis();
-                    }
-                    break;
-                case 37:
-                    console.log("you pressed 37(<-) left key");
-                    if (quiz_counter !== 0) {
-                        clearInterval(my_timer);
-                        replayBool = false;
-                        player.seekTo(getPastStart());
-                        prvWhere();
-                        player.playVideo();
-                    }
-                    break;
-                case 39:
-                    console.log("you pressed 39(->) right key");
-                    if (quiz_counter < srtLast) {
-                        clearInterval(my_timer);
-                        replayBool = false;
-                        if (!stop4quiz) {
-                            if (parsed_srt[0].startTime / 1000 > player.getCurrentTime().toFixed(2)) {
-                                player.seekTo(getNowStart());
-                                nxtWhere();
-                            } else {
-                                player.seekTo(getFutureStart());
-                                nxtWhere();
-                            }
-                        }
-                        player.playVideo();
-                    }
-                    break;
+                cc_load_policy: 1,
+                rel: 0,
+                autohide: 1,
+                disablekb: 1,
+                iv_load_policy: 3,
+                fs: 0,
+                gl: 'KR',
+                hl: 'ko',
+                showinfo: 0
+            },
+            events: {
+                'onReady': onPlayerReady,
+                'onStateChange': onPlayerStateChange
             }
         });
+    }
 
-        function replaces(words) {
+    function onPlayerReady(event) {
+        p["vid"] = p["vid"] || "IXxZRZxafEQ";
+        var request = $.get("subs/" + p["vid"] + ".srt");
+        request.success(function (data) {
+            srt.text = data;
+            srt.parsed = from_srt(srt.text, true);
+            srt.lastIdx = srt.parsed.length - 1;
+            console.log("youtubeReady");
+            event.target.cueVideoById({
+                videoId: p['vid']
+            });
+            $("#starter").removeClass("myHide");
+            $("#hover").hide();
+
+        });
+        request.fail(function () {
+            console.log("자막을 가져오지 못함(자기 컴)");
+            $.ajax({
+                url: 'https://video.google.com/timedtext?lang=en&v=' + p['vid'],
+                success: function (data) {
+                    try {
+                        getSubTry(data, event);
+                    } catch (e) {
+                        $.ajax({
+                            url: 'http://video.google.com/timedtext?lang=en-GB&v=' + p['vid'],
+                            success: function (data) {
+                                try {
+                                    getSubTry(data, event);
+                                } catch (e) {
+                                    $.ajax({
+                                        url: 'http://video.google.com/timedtext?lang=ja&v=' + p['vid'],
+                                        success: function (data) {
+                                            try{
+                                                srt.isJP = true;
+                                                getSubTry(data, event);
+                                            }catch(e){
+                                                console.log(e);
+                                                console.log("자막을 가져오지 못함(유튜브)");
+                                                alert("자막이 없습니다.");
+                                                window.location.href = "/";
+                                            }
+                                        }
+                                    });
+                                }
+                            }
+                        });
+                    }
+                }
+            });
+        });
+    }
+
+    function onPlayerStateChange(event) {
+        switch (event.data) {
+            case YT.PlayerState.UNSTARTED:
+                console.log('unstarted');
+                break;
+            case YT.PlayerState.ENDED:
+                console.log('ended');
+                manage_words.displayJust("", "END", "");
+                //                    setTimeout(function () {
+                //                        window.location.href = "/";
+                //                    }, 800);
+                $("#hover").fadeIn(200);
+                $("#hover").fadeOut(400);
+
+                break;
+            case YT.PlayerState.PLAYING:
+                if (!isPlayByBtn) {
+                    player.stopVideo();
+                    alert("start버튼으로 재생해주세요");
+                }
+                console.log('--playing--');
+                isQuizStop = false;
+                setTimeout(function () {
+                    isReplay = false;
+                }, 3000);
+                my_timer = setInterval(check_where, 5);
+                $("#buttonP").html(""); //버튼 초기화
+                $("#hover").hide();
+                //$("#textP").html("");  //문장 초기화
+                delCnt = 0;
+                wrongCnt = 0;
+                $("#hintP").html("<h1>" + "힌트" + "</h1>");
+                $("#life").html("<h1>" + "틀린횟수" + "</h1>");
+                break;
+            case YT.PlayerState.PAUSED:
+                clearInterval(my_timer);
+                console.log('-paused-');
+                break;
+            case YT.PlayerState.BUFFERING: //중요
+                clearInterval(my_timer);
+                console.log('buffering');
+                break;
+            case YT.PlayerState.CUED:
+                console.log('video cued');
+                break;
+        }
+    }
+
+    function lets_start() {
+        player.playVideo();
+        var fn = function () {
+            player.playVideo();
+        }
+        setTimeout(fn, 3000);
+        $("#starter").remove();
+        isPlayByBtn = true;
+        my_timer = setInterval(check_where, 10);
+        progress_timer = setInterval(function () {
+            var playerTotalTime = player.getDuration();
+            var playerCurrentTime = Math.round(player.getCurrentTime());
+            var playerTimeDifference = (playerCurrentTime / playerTotalTime) * 100;
+            var playerTimePercent = playerTimeDifference.toFixed(2);
+            //console.log(playerTimePercent + '%');
+            $(".progress-bar").width(playerTimePercent + '%');
+        }, 100);
+    }
+
+    function selected_word(i) {
+        return $("#buttonP").children().eq(i).children().eq(0).get(0);
+    }
+
+    function id2number(id) {
+        return parseInt(id.substr(1));
+    }
+    $(document).keydown(function (e) {
+        switch (e.keyCode) {
+            case 65: //A
+                if (selected_word(0) !== undefined) {
+                    if (selected_word(0).onclick !== block_dis)
+                        my_dis(selected_word(0));
+                    else
+                        block_dis();
+                }
+                break;
+            case 83: //S
+                if (selected_word(1) !== undefined) {
+                    if (selected_word(1).onclick !== block_dis)
+                        my_dis(selected_word(1));
+                    else
+                        block_dis();
+                }
+                break;
+            case 68: //D
+                if (selected_word(2) !== undefined) {
+                    if (selected_word(2).onclick !== block_dis)
+                        my_dis(selected_word(2));
+                    else
+                        block_dis();
+                }
+                break;
+            case 70: //F
+                if (selected_word(3) !== undefined) {
+                    if (selected_word(3).onclick !== block_dis)
+                        my_dis(selected_word(3));
+                    else
+                        block_dis();
+                }
+                break;
+            case 37:
+                console.log("you pressed 37(<-) left key");
+                if (quizCnt !== 0) {
+                    clearInterval(my_timer);
+                    isReplay = false;
+                    player.seekTo(getPastStart());
+                    prvWhere();
+                    player.playVideo();
+                }
+                break;
+            case 39:
+                console.log("you pressed 39(->) right key");
+                if (quizCnt < srt.lastIdx) {
+                    clearInterval(my_timer);
+                    isReplay = false;
+                    if (!isQuizStop) {
+                        if (srt.parsed[0].startTime / 1000 > player.getCurrentTime().toFixed(2)) {
+                            player.seekTo(getNowStart());
+                            nxtWhere();
+                        } else {
+                            player.seekTo(getFutureStart());
+                            nxtWhere();
+                        }
+                    }
+                    player.playVideo();
+                }
+                break;
+        }
+    });
+
+    function replaces(words) {
+        if(!srt.isJP){
             words = manage_words.word_replace(words);
             words = words.replace(/<i>/g, "");
             words = words.replace(/<\/i>/g, "");
@@ -355,212 +379,215 @@
             words = words.replace(/\B[^\w' ]+\B/g, "");
             words = words.replace(/ +/g, " ");
             words = words.replace(/^\s*/, '');
-            words = words.replace(/\s*$/, '');
-            return words;
+            words = words.replace(/\s*$/, '');   
+        }else{
+            words = words.replace(/　/g, " ");
+            words = words.replace(/ +/g, " ");
         }
+        return words;
+    }
 
-        function prvWhere() {
-            quiz_counter--;
+    function prvWhere() {
+        quizCnt--;
+    }
+
+    function nxtWhere() {
+        quizCnt++;
+    }
+
+    function getPast() {
+        return quizCnt > 0 ? srt.parsed[quizCnt - 1].endTime / 1000 : 0;
+    }
+
+    function getPastStart() {
+        return quizCnt > 0 ? srt.parsed[quizCnt - 1].startTime / 1000 : 0;
+    }
+
+    function getNow() {
+        if (quizCnt <= srt.lastIdx) {
+            return srt.parsed[quizCnt].endTime / 1000;
+        } else {
+            return player.getDuration() - 0.5;
         }
+    }
 
-        function nxtWhere() {
-            quiz_counter++;
+    function getNowStart() {
+        if (quizCnt <= srt.lastIdx) {
+            return srt.parsed[quizCnt].startTime / 1000;
+        } else {
+            return player.getDuration() - 0.5;
         }
+    }
 
-        function getPast() {
-            return quiz_counter > 0 ? parsed_srt[quiz_counter - 1].endTime / 1000 : 0;
+    function getFuture() {
+        if (quizCnt < srt.lastIdx) {
+            return srt.parsed[quizCnt + 1].endTime / 1000;
+        } else {
+            return player.getDuration() - 0.5;
         }
+    }
 
-        function getPastStart() {
-            return quiz_counter > 0 ? parsed_srt[quiz_counter - 1].startTime / 1000 : 0;
+    function getFutureStart() {
+        if (quizCnt <= srt.lastIdx) {
+            return srt.parsed[quizCnt + 1].startTime / 1000;
+        } else {
+            return player.getDuration() - 0.5;
         }
+    }
 
-        function getNow() {
-            if (quiz_counter <= srtLast) {
-                return parsed_srt[quiz_counter].endTime / 1000;
-            } else {
-                return player.getDuration() - 0.5;
-            }
-        }
-
-        function getNowStart() {
-            if (quiz_counter <= srtLast) {
-                return parsed_srt[quiz_counter].startTime / 1000;
-            } else {
-                return player.getDuration() - 0.5;
-            }
-        }
-
-        function getFuture() {
-            if (quiz_counter < srtLast) {
-                return parsed_srt[quiz_counter + 1].endTime / 1000;
-            } else {
-                return player.getDuration() - 0.5;
-            }
-        }
-
-        function getFutureStart() {
-            if (quiz_counter <= srtLast) {
-                return parsed_srt[quiz_counter + 1].startTime / 1000;
-            } else {
-                return player.getDuration() - 0.5;
-            }
-        }
-
-        function check_where() {
-            var How_video_pasted = player.getCurrentTime().toFixed(2);
-            if (!allRightBool) {
-                if (getPast() > How_video_pasted) { //진행시간이 과거 보다 작으면
-                    if (quiz_counter > 0) {
-                        if (!replayBool && !allRightBool) {
-                            console.log(quiz_counter + ": ViewPrv");
-                            prvWhere(); //카운터를 줄인다.
-                        }
+    function check_where() {
+        var How_video_pasted = player.getCurrentTime().toFixed(2);
+        if (!isAllRight) {
+            if (getPast() > How_video_pasted) { //진행시간이 과거 보다 작으면
+                if (quizCnt > 0) {
+                    if (!isReplay && !isAllRight) {
+                        console.log(quizCnt + ": ViewPrv");
+                        prvWhere(); //카운터를 줄인다.
                     }
                 }
-                if (getFuture() < How_video_pasted) { //진행시간이 미래 보다 크면
-                    if (quiz_counter < srtLast - 1) {
-                        console.log(quiz_counter + ": ViewNxt");
-                        nxtWhere(); //카운터를 늘린다.
-                    }
-                } else {
-                    if (getNow() <= How_video_pasted && ("" != wordOnly(replaces(parsed_srt[quiz_counter].text)))) { //진행시간이 미래 보다 작고, 현재보다 크면
-                        console.log("진행 현재보다 큼(멈춤)");
-                        replayBool = false;
-                        stop4quiz = true;
-                        $("#buttonP").html("");
-                        player.pauseVideo();
-                        manage_words.sen2wordPushAll(parsed_srt[quiz_counter].text);
-                        unshuffled = parsed_srt[quiz_counter].text;
-                        unshuffled = replaces(unshuffled);
-                        unshuffled = unshuffled.split(" ");
-                        [0, 1, 2, 3].forEach(function (i) {
-                            if (i < unshuffled.length) SuffButton[i] = unshuffled[i % unshuffled.length];
-                        });
-                        SuffButton = shuffle(SuffButton);
-                        [0, 1, 2, 3].forEach(function (my_x) {
-                            $("#buttonP").append('<div class="textboxWidth" style=" float: left;"><button id=b' + my_x + ' class="btn btn-primary btn-lg center-block" style="background-color:#fff;color:#000;font-size:17px;position: relative; display: block; height:80px;width:85%; padding:0; margin:0 auto;" onclick="my_dis(this)">' + wordOnly(SuffButton[my_x]) + "</button></div>");
-                        });
-                        addOnMouse();
-                        $("#textP").html("");
-                        nxtWhere();
-                        console.log(quiz_counter + ": 새 버튼 생성");
-                    }
+            }
+            if (getFuture() < How_video_pasted) { //진행시간이 미래 보다 크면
+                if (quizCnt < srt.lastIdx - 1) {
+                    console.log(quizCnt + ": ViewNxt");
+                    nxtWhere(); //카운터를 늘린다.
                 }
-            } else if (getPast() <= How_video_pasted) {
-                allRightBool = false;
-                if (getPastStart() <= How_video_pasted) { //진행시간이 미래 보다 작고, 현재보다 크면
-                    $("#textP").html(""); // 자막 지우기
+            } else {
+                if (getNow() <= How_video_pasted && ("" != wordOnly(replaces(srt.parsed[quizCnt].text)))) { //진행시간이 미래 보다 작고, 현재보다 크면
+                    console.log("진행 현재보다 큼(멈춤)");
+                    isReplay = false;
+                    isQuizStop = true;
+                    $("#buttonP").html("");
+                    player.pauseVideo();
+                    manage_words.sen2wordPushAll(srt.parsed[quizCnt].text);
+                    unshuffled = srt.parsed[quizCnt].text;
+                    unshuffled = replaces(unshuffled);
+                    unshuffled = unshuffled.split(" ");
+                    [0, 1, 2, 3].forEach(function (i) {
+                        if (i < unshuffled.length) quizWords[i] = unshuffled[i % unshuffled.length];
+                    });
+                    quizWords = shuffle(quizWords);
+                    [0, 1, 2, 3].forEach(function (my_x) {
+                        $("#buttonP").append('<div class="textboxWidth" style=" float: left;"><button id=b' + my_x + ' class="btn btn-primary btn-lg center-block" style="background-color:#fff;color:#000;font-size:17px;position: relative; display: block; height:80px;width:85%; padding:0; margin:0 auto;" onclick="my_dis(this)">' + wordOnly(quizWords[my_x]) + "</button></div>");
+                    });
+                    addOnMouse();
+                    $("#textP").html("");
+                    nxtWhere();
+                    console.log(quizCnt + ": 새 버튼 생성");
                 }
             }
+        } else if (getPast() <= How_video_pasted) {
+            isAllRight = false;
+            if (getPastStart() <= How_video_pasted) { //진행시간이 미래 보다 작고, 현재보다 크면
+                $("#textP").html(""); // 자막 지우기
+            }
         }
+    }
 
-        function replay() {
-            console.log(quiz_counter + ":replay가 불려짐");
-            prvWhere();
-            player.seekTo(getNowStart() - 0.1);
-            replayBool = true;
+    function replay() {
+        console.log(quizCnt + ":replay가 불려짐");
+        prvWhere();
+        player.seekTo(getNowStart() - 0.1);
+        isReplay = true;
+        player.playVideo();
+        wrongCnt = 0;
+    }
+
+    function addOnMouse() {
+          ["#b0", "#b1", "#b2", "#b3"].forEach(function (btn, cnt) {
+            $(btn).mouseenter(
+                function () {
+                    if (manage_words.displayMatch(quizWords[cnt])) {
+                        $("#hover").clearQueue();
+                        $("#hover").stop().fadeIn(300);
+                    } else {
+                        $("#hover").clearQueue();
+                        $("#hover").fadeOut(300);
+                    }
+                }
+            ).mouseleave(function () {
+                $("#hover").fadeOut(300);
+            });
+        });
+    }
+
+    function block_click() {
+        [0, 1, 2, 3].forEach(function (i) {
+            if (wordOnly(unshuffled[delCnt]) != wordOnly(quizWords[id2number(selected_word(i).id)])) {
+                var right_answer = wordOnly(unshuffled[delCnt]);
+                selected_word(i).style.backgroundColor = "#eee";
+                selected_word(i).onclick = block_dis;
+            }
+        });
+    }
+
+    function block_dis() {
+        $("#buttonP").html("");
+        $("#hintP").html("");
+        [0, 1, 2, 3].forEach(function (i) {
+            if (i < unshuffled.length) quizWords[i] = unshuffled[(i + delCnt) % unshuffled.length];
+        });
+        quizWords = shuffle(quizWords);
+            [0, 1, 2, 3].forEach(function (my_x) {
+            $("#buttonP").append('<div class="textboxWidth" style="float: left;"><button id=b' + my_x + ' class="btn btn-primary btn-lg center-block" style="background-color:#fff;color:#000;font-size:17px;position: relative; display: block; height:80px;width: 85%;padding: 0; margin:0 auto;" onclick="my_dis(this)">' + wordOnly(quizWords[my_x]) + "</button></div>");
+        });
+        //$("#textP").append(unshuffled[delCnt]);
+        $("#textP").append(unshuffled[delCnt] + " ");
+        delCnt++;
+        if (unshuffled.length == delCnt) { //전부 맞첬을 경우
+            $("#myprogress").addClass("blinkGreen");
+            setTimeout(function () {
+                $("#myprogress").removeClass("blinkGreen");
+            }, 1000);
+            player.seekTo(getPastStart() - 0.1);
             player.playVideo();
-            HowMany_wrongs = 0;
+            isAllRight = true;
+            delCnt = 0;
         }
+    }
 
-        function addOnMouse() {
-              ["#b0", "#b1", "#b2", "#b3"].forEach(function (btn, cnt) {
-                $(btn).mouseenter(
-                    function () {
-                        if (manage_words.displayMatch(SuffButton[cnt])) {
-                            $("#hover").clearQueue();
-                            $("#hover").stop().fadeIn(300);
-                        } else {
-                            $("#hover").clearQueue();
-                            $("#hover").fadeOut(300);
-                        }
-                    }
-                ).mouseleave(function () {
-                    $("#hover").fadeOut(300);
-                });
-            });
-        }
-
-        function block_click() {
-            [0, 1, 2, 3].forEach(function (i) {
-                if (wordOnly(unshuffled[howMany_del]) != wordOnly(SuffButton[id2number(selected_word(i).id)])) {
-                    var right_answer = wordOnly(unshuffled[howMany_del]);
-                    selected_word(i).style.backgroundColor = "#eee";
-                    selected_word(i).onclick = block_dis;
-                }
-            });
-        }
-
-        function block_dis() {
+    function my_dis(my) {
+        if (wordOnly(unshuffled[delCnt]) == wordOnly(quizWords[id2number(my.id)])) { //정답일 경우[
             $("#buttonP").html("");
             $("#hintP").html("");
             [0, 1, 2, 3].forEach(function (i) {
-                if (i < unshuffled.length) SuffButton[i] = unshuffled[(i + howMany_del) % unshuffled.length];
+                if (i < unshuffled.length) quizWords[i] = unshuffled[(i + delCnt) % unshuffled.length];
             });
-            SuffButton = shuffle(SuffButton);
-                [0, 1, 2, 3].forEach(function (my_x) {
-                $("#buttonP").append('<div class="textboxWidth" style="float: left;"><button id=b' + my_x + ' class="btn btn-primary btn-lg center-block" style="background-color:#fff;color:#000;font-size:17px;position: relative; display: block; height:80px;width: 85%;padding: 0; margin:0 auto;" onclick="my_dis(this)">' + wordOnly(SuffButton[my_x]) + "</button></div>");
+            quizWords = shuffle(quizWords);
+            [0, 1, 2, 3].forEach(function (my_x) {
+                $("#buttonP").append('<div class="textboxWidth" style="float: left;"><button id=b' + my_x + ' class="btn btn-primary btn-lg center-block" style="background-color:#fff;color:#000;font-size:17px;position: relative; display: block; height:80px;width: 85%;padding: 0; margin:0 auto;" onclick="my_dis(this)">' + wordOnly(quizWords[my_x]) + "</button></div>");
             });
-            //$("#textP").append(unshuffled[howMany_del]);
-            $("#textP").append(unshuffled[howMany_del] + " ");
-            howMany_del++;
-            if (unshuffled.length == howMany_del) { //전부 맞첬을 경우
+            addOnMouse();
+            //$("#textP").append(unshuffled[delCnt]);
+            $("#textP").append(unshuffled[delCnt] + " ");
+            delCnt++;
+            if (unshuffled.length == delCnt) { //전부 맞첬을 경우
                 $("#myprogress").addClass("blinkGreen");
                 setTimeout(function () {
                     $("#myprogress").removeClass("blinkGreen");
                 }, 1000);
                 player.seekTo(getPastStart() - 0.1);
                 player.playVideo();
-                allRightBool = true;
-                howMany_del = 0;
+                isAllRight = true;
+                delCnt = 0;
+            }
+        } else { //틀릴 경우
+            wrongCnt++;
+            wrongWord += quizWords[id2number(my.id)] + ",";
+            if (wrongCnt == 3) { //3번 틀리면 다시 시작.
+                console.log("3번 틀려서 replay를 부름");
+                $("#myprogress").addClass("blinkRed");
+                setTimeout(function () {
+                    $("#myprogress").removeClass("blinkRed");
+                }, 1000);
+                replay();
+            } else {
+                block_click();
+                /*[0, 1, 2, 3].forEach(function (i) {
+                    if (wordOnly(unshuffled[delCnt]) == wordOnly(quizWords[id2number(selected_word(i).id)])) {
+                        selected_word(i).style.color = "dodgerblue";
+                    }
+                });*/
+                $("#hintP").html("<h1>" + unshuffled[delCnt] + "</h1>");
             }
         }
-
-        function my_dis(my) {
-            if (wordOnly(unshuffled[howMany_del]) == wordOnly(SuffButton[id2number(my.id)])) { //정답일 경우[
-                $("#buttonP").html("");
-                $("#hintP").html("");
-                [0, 1, 2, 3].forEach(function (i) {
-                    if (i < unshuffled.length) SuffButton[i] = unshuffled[(i + howMany_del) % unshuffled.length];
-                });
-                SuffButton = shuffle(SuffButton);
-                [0, 1, 2, 3].forEach(function (my_x) {
-                    $("#buttonP").append('<div class="textboxWidth" style="float: left;"><button id=b' + my_x + ' class="btn btn-primary btn-lg center-block" style="background-color:#fff;color:#000;font-size:17px;position: relative; display: block; height:80px;width: 85%;padding: 0; margin:0 auto;" onclick="my_dis(this)">' + wordOnly(SuffButton[my_x]) + "</button></div>");
-                });
-                addOnMouse();
-                //$("#textP").append(unshuffled[howMany_del]);
-                $("#textP").append(unshuffled[howMany_del] + " ");
-                howMany_del++;
-                if (unshuffled.length == howMany_del) { //전부 맞첬을 경우
-                    $("#myprogress").addClass("blinkGreen");
-                    setTimeout(function () {
-                        $("#myprogress").removeClass("blinkGreen");
-                    }, 1000);
-                    player.seekTo(getPastStart() - 0.1);
-                    player.playVideo();
-                    allRightBool = true;
-                    howMany_del = 0;
-                }
-            } else { //틀릴 경우
-                HowMany_wrongs++;
-                wrongsCnt++;
-                wrongWord += SuffButton[id2number(my.id)] + ",";
-                if (HowMany_wrongs == 3) { //3번 틀리면 다시 시작.
-                    console.log("3번 틀려서 replay를 부름");
-                    $("#myprogress").addClass("blinkRed");
-                    setTimeout(function () {
-                        $("#myprogress").removeClass("blinkRed");
-                    }, 1000);
-                    replay();
-                } else {
-                    block_click();
-                    /*[0, 1, 2, 3].forEach(function (i) {
-                        if (wordOnly(unshuffled[howMany_del]) == wordOnly(SuffButton[id2number(selected_word(i).id)])) {
-                            selected_word(i).style.color = "dodgerblue";
-                        }
-                    });*/
-                    $("#hintP").html("<h1>" + unshuffled[howMany_del] + "</h1>");
-                }
-            }
-        }
+    }
